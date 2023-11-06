@@ -3,8 +3,8 @@ This python module stores some functions that are useful for plotting in-plane
 magnetic fields.
 """
 __author__ = "Fehmi Yasin"
-__date__ = "21/07/17"
-__version__ = "1.0"
+__date__ = "23/08/17"
+__version__ = "1.1"
 __maintainer__ = "Fehmi Yasin"
 __email__ = "fehmi.yasin@riken.jp"
 
@@ -16,10 +16,10 @@ from matplotlib.colors import colorConverter
 
 def plot_B_3D(b_arr,sv_file_name='',sv_fmt='png',im_w=1,nm_pix=1,arr_w=.01,
               arr_scale=25,m_step=0,arrows=True,im_only=True,normalize=False,
-              v_min=-1,v_max=1,annote='',annote_loc=[0.8,0.95],inset_mag='',
+              vmin=False,vmax=False,annote='',annote_loc=[0.8,0.95],inset_mag='',
               inset=False,inset_loc=[0,0,0.25,0.25],hline_loc=False,
               vline_loc=False,hline_loc_inset=False,vline_loc_inset=False,
-              twoD_arr=False,intensity_scale=1,offset_angle=0):
+              twoD_arr=False,offset_angle=0, intensity_norm=True):
     """
     Plotting a slice of a 3D vector field. B_ARR is the
     vector field array with shape [3, NY_PIX, NX_PIX].
@@ -41,12 +41,14 @@ def plot_B_3D(b_arr,sv_file_name='',sv_fmt='png',im_w=1,nm_pix=1,arr_w=.01,
 
     PIX=nm_pix #nm/pix
     
-    MX = np.copy(b_arr[0])
-    MY = np.copy(b_arr[1])
+    mx = np.copy(b_arr[0])
+    my = np.copy(b_arr[1])
     if twoD_arr==False:
-        MZ = np.copy(b_arr[2])
+        mz = np.copy(b_arr[2])
     else:
-        MZ = np.zeros_like(MX)
+        mz = np.ones_like(mx)
+        mz *= -np.max(np.sqrt(mx ** 2 + my ** 2))
+        mz +=  np.sqrt(mx ** 2 + my ** 2)
     MIDX = np.shape(b_arr)[2]//2
     MIDY = np.shape(b_arr)[1]//2
     NX_PIX = np.shape(b_arr)[2]
@@ -58,38 +60,36 @@ def plot_B_3D(b_arr,sv_file_name='',sv_fmt='png',im_w=1,nm_pix=1,arr_w=.01,
                                        MIDX+IM_WIDTH_X)
     
     if normalize==True:
-        MX_NORM=(np.copy(MX)/np.max(np.abs([MX,MY])))[BOX]
-        MY_NORM=(np.copy(MY)/np.max(np.abs([MX,MY])))[BOX]
-        MZ_NORM=(np.copy(MZ)/np.max(np.abs([MX,MY,MZ])))[BOX]
+        norm_denom = np.max(np.sqrt(mx ** 2 + my ** 2 + mz **2))
+        MX_NORM=(np.copy(mx) / norm_denom)[BOX]
+        MY_NORM=(np.copy(my) / norm_denom)[BOX]
+        MZ_NORM=(np.copy(mz) / norm_denom)[BOX]
     else:
-        MX_NORM=np.copy(MX)[BOX]
-        MY_NORM=np.copy(MY)[BOX]
-        MZ_NORM=np.copy(MZ)[BOX]
+        MX_NORM=np.copy(mx)[BOX]
+        MY_NORM=np.copy(my)[BOX]
+        MZ_NORM=np.copy(mz)[BOX]
     
-    B_C = np.copy(MY_NORM) + 1.0j*np.copy(MX_NORM)
-    B_C_AMP = np.abs(B_C)**1.
-    B_C_PHI = np.angle(B_C)+(offset_angle/180.*np.pi)
-    B_C = np.copy(B_C_AMP)*np.exp(1.0j*B_C_PHI)
-    B_C_PHI2 = np.angle(B_C)+(offset_angle/180.*np.pi)
-    B_C2 = np.copy(B_C_AMP)*np.exp(1.0j*B_C_PHI2)
+    b_inplane = np.copy(MY_NORM) + 1.0j*np.copy(MX_NORM)
+    rgba_b = smooth_hsv.smooth_rgba(MX_NORM, MY_NORM, MZ_NORM)
+
     FTSIZE=35
     TICKSIZE=0.75*FTSIZE
-    FIG_SIZE_FACTOR = 13./np.max([np.shape(B_C)[0],np.shape(B_C)[1]])
-    FIG_SIZE = (FIG_SIZE_FACTOR*np.shape(B_C)[1],
-                FIG_SIZE_FACTOR*np.shape(B_C)[0])
+    FIG_SIZE_FACTOR = 13./np.max([np.shape(b_inplane)[0],np.shape(b_inplane)[1]])
+    FIG_SIZE = (FIG_SIZE_FACTOR*np.shape(b_inplane)[1],
+                FIG_SIZE_FACTOR*np.shape(b_inplane)[0])
     
     NUM_PTS = 5
-    INCREMENT = int(round(PIX*np.shape(B_C)[0]//NUM_PTS,-1)) #nm
+    INCREMENT = int(round(PIX*np.shape(b_inplane)[0]//NUM_PTS,-1)) #nm
     if m_step==0:
         M_STEP=int(np.shape(MX_NORM)[0]//(2**5.5))
     else:
         M_STEP=int(m_step)
     print("M_STEP = "+str(M_STEP))
-    TEMPX=np.copy(np.imag(B_C2))[:-1:2*M_STEP,:-1:2*M_STEP]
-    TEMPY=np.copy(np.real(B_C2))[:-1:2*M_STEP,:-1:2*M_STEP]
+    TEMPX=np.copy(np.imag(b_inplane))[:-1:1*M_STEP,:-1:1*M_STEP]
+    TEMPY=np.copy(np.real(b_inplane))[:-1:1*M_STEP,:-1:1*M_STEP]
     
-    X1 = np.linspace(0, PIX*int(np.shape(B_C)[1]), np.shape(TEMPX)[1])
-    Y1 = np.linspace(0, PIX*int(np.shape(B_C)[0]), np.shape(TEMPX)[0])
+    X1 = np.linspace(0, PIX*int(np.shape(b_inplane)[1]), np.shape(TEMPX)[1])
+    Y1 = np.linspace(0, PIX*int(np.shape(b_inplane)[0]), np.shape(TEMPX)[0])
     
     X, Y = np.meshgrid(X1,Y1)
     
@@ -103,32 +103,32 @@ def plot_B_3D(b_arr,sv_file_name='',sv_fmt='png',im_w=1,nm_pix=1,arr_w=.01,
         WIDTH = arr_w
         ax.quiver(X, Y, (TEMPX), (TEMPY),
                   scale=SCALE,  width=WIDTH,
-                  pivot='mid', color='w', alpha=0.7)
+                  pivot='mid', color='w', alpha=0.7,
+                  linewidth = 1, edgecolor = 'gray')
     
     EXTENT = np.min(X1), np.max(X1), np.min(Y1), np.max(Y1)
-    ax.imshow((smooth_hsv.smooth_hsv(B_C,intensity_scale=intensity_scale)),
-               interpolation='none',
-               origin='lower', extent=EXTENT, vmin=v_min,vmax=v_max)
+    if vmin == False:
+        vec_len = np.sqrt(mx ** 2 + my ** 2 + mz **2)
+        vmin == np.min(vec_len)
+    if vmax == False:
+        vec_len = np.sqrt(mx ** 2 + my ** 2 + mz **2)
+        vmax == np.max(vec_len)
+    rgba_b_reshaped = np.copy(rgba_b.reshape(np.shape(MX_NORM)[0],
+                                             np.shape(MX_NORM)[1],
+                                             4))
+    if intensity_norm == True:
+        int_norm = 255. / np.max(rgba_b_reshaped[:,:,:3])
+        print('intensity_norm = ', round(int_norm, 2))
+        rgba_b_reshaped[:,:,:3] = (np.copy(rgba_b_reshaped)[:,:,:3] *
+                                   int_norm).astype(np.uint8)
+        print(rgba_b_reshaped[0,0,:])
+
+    ax.imshow(rgba_b_reshaped, interpolation='none',
+               origin='lower', extent=EXTENT, vmin = vmin, vmax = vmax)
     
-    if twoD_arr==False:
-        # generate the colors for your colormap
-        color1 = colorConverter.to_rgba('white')
-        color2 = colorConverter.to_rgba('black')
-        
-        # make the colormaps
-        cmap2 = mpl.colors.LinearSegmentedColormap.from_list('my_cmap2',[color2,color1],256)
-        
-        cmap2._init() # create the _lut array, with rgba values
-        
-        # create your alpha array and fill the colormap with them.
-        # here it is progressive, but you can create whathever you want
-        alphas = np.linspace(0., 0.5, cmap2.N+3)
-        cmap2._lut[:,-1] = alphas
-        ax.imshow(MZ_NORM,cmap=cmap2,
-                 origin='lower', extent=EXTENT,vmin=v_min,vmax=v_max)
     if annote!='':
         PROPS = dict(boxstyle='round', facecolor='k', alpha=0.5)
-        plt.text(annote_loc[0]*np.shape(MX)[1],annote_loc[1]*np.shape(MX)[0],
+        plt.text(annote_loc[0]*np.shape(mx)[1],annote_loc[1]*np.shape(mx)[0],
                  str(annote),
                  color='w',
                  fontsize=FTSIZE, bbox=PROPS)

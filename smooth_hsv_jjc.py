@@ -11,7 +11,7 @@ class Normalization(__Enum):
     Log = 2
 
 
-def smooth_hsv(complex_array, norm=Normalization.Intensity, max_cutoff=None, high_saturation=False,
+def smooth_hsv(complex_array, norm=Normalization.Length, max_cutoff=None, high_saturation=False,
                conserve_memory=False, intensity_scale=1):
     """
     This function takes a complex input array and return a list of [red, green, blue] arrays
@@ -23,6 +23,7 @@ def smooth_hsv(complex_array, norm=Normalization.Intensity, max_cutoff=None, hig
     :param conserve_memory: if True, will use float16 (this is slow), else use float32
     :return:
     """
+    import numpy as np
     if conserve_memory:
         float_type = _np.float16
     else:
@@ -101,9 +102,11 @@ def smooth_hsv(complex_array, norm=Normalization.Intensity, max_cutoff=None, hig
             pi6 = _np.pi / 6.
 
             colors[j:k, ::, 0] = val * _np.abs(_np.sin((hue - 0) * pi6)) ** n
-            colors[j:k, ::, 1] = 0.6 * val * _np.abs(_np.sin((hue - 4) * pi6)) ** n
+            #colors[j:k, ::, 1] = val * _np.abs(_np.sin((hue - 4) * pi6)) ** n
             colors[j:k, ::, 2] = val * _np.abs(_np.sin((hue - 8) * pi6)) ** n
 
+            # The following color mixing code was removed by FSY 23/06/15
+            colors[j:k, ::, 1] = 0.6 * val * _np.abs(_np.sin((hue - 4) * pi6)) ** n
             colors[j:k, ::, 1] += colors[j:k, ::, 2] * 0.35
             colors[j:k, ::, 1] += colors[j:k, ::, 0] * 0.1
 
@@ -117,7 +120,7 @@ def smooth_hsv(complex_array, norm=Normalization.Intensity, max_cutoff=None, hig
 
     return colors*intensity_scale
 
-def smooth_rgba(b_c,b_z,TEST=False):
+def smooth_rgba_old(b_c,b_z,TEST=False):
     """
     Inputs complex, 2D in-plane magnetic field array b_c (b_y+1.j*b_x) and
     b_z. Returns an RGBA color array of the same size as b_c.
@@ -162,3 +165,47 @@ def smooth_rgba(b_c,b_z,TEST=False):
     for i,_ in enumerate(COLORS[0]):
         COLORS2[:,:,i] = _np.reshape(COLORS[:,i],_np.shape(b_z))
     return(COLORS2)
+
+def smooth_rgba(mx, my, mz):
+    """
+    Inputs a 2D vector field and outputs an N x 4 array that represents
+    Red, Blue, Green, Alpha color for each vector.
+    """
+    import numpy as np
+    # Generate random colors
+    num_glyphs = np.size(mx)
+    colors = np.random.randint(0, 256, (num_glyphs, 4), dtype=np.uint8)
+    colors[:, -1] = 255  # No transparency
+    
+    # Compute angle and magnitude
+    phi = np.angle(my + 1j * mx)
+    amp = np.abs(my + 1j * mx)
+    b_in_plane = amp * np.exp(1j * phi)
+    
+    # Compute in-plane colors
+    #for i,_ in enumerate(b_in_plane):
+    #    col_in_plane.append(smooth_hsv.smooth_hsv(b_in_plane[i],
+    #                        intensity_scale=1.))
+    col_in_plane = [smooth_hsv(b_in_plane, intensity_scale=1.)]
+    col_in_plane = np.array(col_in_plane)
+    
+    # Compute angle away from plane
+    for i in range(num_glyphs):
+        mz_norm = np.ravel(mz)[i]
+    
+    #   Compute theta
+        theta = np.arccos(mz_norm)
+    
+    #   Compute in-plane colors
+        col_in_plane_temp = col_in_plane.reshape(-1, 3)[i]
+        scaling_factor = 1.0  # Adjust the scaling factor as needed
+        color_temp = (np.sin(theta) * col_in_plane_temp + 
+                      (np.cos(theta) + 1) / 2) * scaling_factor
+    
+    #   Normalize and assign colors
+        max_temp = np.max(color_temp)
+        if max_temp > 1:
+            color_temp /= max_temp
+    
+        colors[i, :3] = 255 * color_temp
+    return(colors)

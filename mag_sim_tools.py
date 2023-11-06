@@ -36,6 +36,30 @@ class SpatialFrequencies(object):
         y[0, 0] = (y[0, 1] + y[1, 0] + y[1, 1])/3. * 0.0001
         self.inverse2 = 1./(x**2 + y**2)
 
+def calc_divergence(b_arr):
+    '''
+    Calculates the divergence of a magnetic vector field.
+    b_arr has dimensions (3, nz, ny, nx) and b_arr[0:2] are b_x, b_y, and b_z,
+    respectively.
+    '''
+
+    # Get the dimensions of the array
+    _, nz, ny, nx = b_arr.shape
+    
+    # Calculate the divergence using finite differences
+    div = np.zeros((nz, ny, nx), dtype=np.float64)
+    
+    # Calculate the divergence for each component
+    for i in range(3):
+        if i == 0:
+            div += np.gradient(b_arr[i], axis=2)
+        elif i == 1:
+            div += np.gradient(b_arr[i], axis=1)
+        else:
+            div += np.gradient(b_arr[i], axis=0)
+    
+    return div
+
 def calc_N_topo(bx_2d,by_2d,bz_2d,width=3,TEST=False):
     '''
     Takes a square array that's been preprocessed so that
@@ -112,7 +136,49 @@ def calc_winding_number(bx_2d,by_2d,bz_2d):
         Omega.append(2*(np.arctan(numerator/denom)+
                         np.arctan(numerator2/denom2)))
     W = -(1/(4*np.pi))*np.sum(np.array(Omega))
-    return(W)
+    if density == True:
+        return(-(1 / (4 * np.pi)) * np.array(Omega))
+    else:
+        return(W)
+
+def calc_winding_number_density(bx_2d, by_2d, bz_2d):
+    '''
+    Takes a square array that's been preprocessed so that
+    the spin texture is located near the center pixel of a
+    rectangular array and calculates the winding number density
+    of the spin texture.
+    '''
+    mag_i = np.array([bx_2d, by_2d, bz_2d])
+    mag_j = np.roll(np.roll(mag_i, shift=-1, axis=1), shift=-1, axis=2)
+    mag_k = np.roll(mag_i, shift=-1, axis=1)
+    mag_k2 = np.roll(mag_i, shift=-1, axis=2)
+    mag_i_1D = np.array([np.ravel(mag_i[0]), np.ravel(mag_i[1]),
+                         np.ravel(mag_i[2])])
+    mag_j_1D = np.array([np.ravel(mag_j[0]), np.ravel(mag_j[1]),
+                         np.ravel(mag_j[2])])
+    mag_k_1D = np.array([np.ravel(mag_k[0]), np.ravel(mag_k[1]),
+                         np.ravel(mag_k[2])])
+    mag_k2_1D = np.array([np.ravel(mag_k2[0]), np.ravel(mag_k2[1]),
+                          np.ravel(mag_k2[2])])
+
+    winding_number_density = np.zeros(bx_2d.shape[:2])
+    for i in range(np.size(mag_i[0])):
+        numerator = np.inner(mag_i_1D[:, i],
+                             np.cross(mag_j_1D[:, i], mag_k_1D[:, i]))
+        denom = (1 + np.inner(mag_i_1D[:, i], mag_j_1D[:, i]) +
+                 np.inner(mag_j_1D[:, i], mag_k_1D[:, i]) +
+                 np.inner(mag_k_1D[:, i], mag_i_1D[:, i]))
+        numerator2 = np.inner(mag_i_1D[:, i],
+                              np.cross(mag_k2_1D[:, i], mag_j_1D[:, i]))
+        denom2 = (1 + np.inner(mag_i_1D[:, i], mag_k2_1D[:, i]) +
+                  np.inner(mag_k2_1D[:, i], mag_j_1D[:, i]) +
+                  np.inner(mag_j_1D[:, i], mag_i_1D[:, i]))
+        winding_number_density += 2 * (np.arctan(numerator / denom) +
+                                       np.arctan(numerator2 / denom2))
+
+    winding_number_density *= -(1 / (4 * np.pi))
+
+    return winding_number_density
 
 def defl(Mx,My,Mz,E_0=200,t=100*(10**-9)):
     """
@@ -244,8 +310,8 @@ def npy_to_ovf(m_array,file_name="",xpix_len=1,ypix_len=1,zpix_len=1):
     file save name, and the pixel length in nm of each dimension and returns an
     .ovf file for use in OOMMF or mumax.
     """
-    ARR=np.copy(m_array)[:,:,::-1,:]
-    ARR[1]*=-1
+    ARR=np.copy(m_array)#[:,:,::-1,:]
+    #ARR[1]*=-1
     
     TITLE=file_name
     XPIX = xpix_len
@@ -309,10 +375,10 @@ def phase_from_magnetization(Mx, My, pixel_size, t, Ms=0.000384, PAD=True,
     const = 1.909168 * float(Ms) * float(t)  # 1.9... is np.pi*mu_0/(flux quantum)
     if PAD==True:
         # PAD the array (quadruple the size) in order to avoid
-        # edge-induced FFT artifacts within the output array
+        # edge-induced FFT artifacts within the output array. This 
         N_PIX_KY_ORIG = np.shape(Mx)[0]
         N_PIX_KX_ORIG = np.shape(Mx)[1]
-        X_PAD = int(3*N_PIX_KX_ORIG) 
+        X_PAD = int(4*N_PIX_KX_ORIG) 
 
         Mx = np.pad(np.copy(Mx),pad_width=((X_PAD//2,X_PAD//2),
                                                  (X_PAD//2,X_PAD//2)),
@@ -797,7 +863,7 @@ def skyrmion_conic(m, gamma, A, C, width, centers, pxsize, Npixels,
 
 def transfer_function(aperture, pixel_size, defocus, wavelength=0.00196,
                       Cs=0, alpha=None):
-    """Cs and pixel_size should be in units nm"""
+    """Cs, wavelength, and pixel_size should be in units of nm."""
     q = SpatialFrequencies(aperture, float(pixel_size))
     if Cs == 0:
         spherical = 0

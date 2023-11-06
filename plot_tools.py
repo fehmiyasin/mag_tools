@@ -154,6 +154,11 @@ def plot_2D(array, Title='Add Title', colorbar="True", vmin=0.0, vmax=None,
                                extent = [xmin,xmax,ymax,ymin],
                                cmap = str(cmap), interpolation = interpolate,
                                vmin = vmin, vmax = vmax)
+        if annotation != False:
+            ax.text(s = str(annotation),
+                     x = annotation_loc[0] * array.shape[1],
+                     y = annotation_loc[1] * array.shape[0], c = 'w',
+                     size = annotation_size, backgroundcolor = 'k')
         if image_only==False:
             ax.set_title(Title, fontsize = fontsize_title)
             ax.set_xlabel(x_label, fontsize = fontsize_label)
@@ -175,13 +180,13 @@ def plot_2D(array, Title='Add Title', colorbar="True", vmin=0.0, vmax=None,
             scalebar = add_scalebar(array, pix = PIX, 
                                     pix_unit = pix_unit,
                                     coord_system = ax.transData,
-                                    scalebar_fraction_of_image = 0.25,
+                                    scalebar_fraction_of_image = 0.2,
                                     loc = 'lower right', label_top = True,
                                     sep = 5, frameon = False,
                                     ftsize = FTSIZE, color = 'white')
             ax.add_artist(scalebar)
         if image_only == True:
-            plt.tick_params(axis = 'both', which = 'both', bottom = 'off',
+            ax.tick_params(axis = 'both', which = 'both', bottom = 'off',
                             labelbottom = 'off', left = 'off',
                             labelleft = 'off')
             ax.axes.xaxis.set_ticks([])
@@ -192,11 +197,6 @@ def plot_2D(array, Title='Add Title', colorbar="True", vmin=0.0, vmax=None,
         else:
             plt.xticks(fontsize = fontsize_label)
             plt.yticks(fontsize = fontsize_label)
-        if annotation != False:
-            plt.text(s = str(annotation),
-                     x = annotation_loc[0] * array.shape[1],
-                     y = annotation_loc[1] * array.shape[0], c = 'w',
-                     size = annotation_size, backgroundcolor = 'k')
         if filename != None:
             plt.autoscale(tight=True)
             plt.savefig(str(filename) + "."+str(sv_fmt), format = str(sv_fmt),
